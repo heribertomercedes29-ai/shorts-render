@@ -1,0 +1,54 @@
+name: Render Filo (prueba)
+
+on:
+  workflow_dispatch:
+    inputs:
+      frames:
+        description: "Rango de cuadros a renderizar"
+        required: true
+        default: "0-319"
+      salida:
+        description: "Nombre del MP4 de salida"
+        required: true
+        default: "filo_c1.mp4"
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Info de la máquina
+        run: |
+          echo "Núcleos: $(nproc)"
+          free -h
+          df -h .
+
+      - name: Instalar dependencias
+        run: npm ci || npm install
+
+      - name: Librerías de sistema para Chrome headless
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnss3 libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2t64 libpango-1.0-0 libcairo2
+
+      - name: Renderizar el trozo
+        run: |
+          mkdir -p .tmp out
+          export TEMP="$GITHUB_WORKSPACE/.tmp" TMPDIR="$GITHUB_WORKSPACE/.tmp"
+          npx remotion render src/index.ts Filo "out/${{ inputs.salida }}" --codec h264 --crf 16 --frames=${{ inputs.frames }} --concurrency=$(nproc) --gl=swangle --timeout=240000
+
+      - name: Subir el trozo como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.salida }}
+          path: out/${{ inputs.salida }}
+          retention-days: 7
